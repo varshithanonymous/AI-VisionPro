@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Health Companion | Symptom Analysis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.9.2/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #f5f7fa, #e4e8f0);
+      min-height: 100vh;
+    }
+    .card {
+      border-radius: 20px;
+    }
+    .btn-gradient {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border: none;
+    }
+    #map {
+      width: 100%;
+      height: 400px;
+      display: none;
+      border-radius: 20px;
+      margin-top: 20px;
+    }
+    #resultCard {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-5">
+    <div class="text-center mb-4">
+      <h1 class="display-4 text-primary">
+        <i class="fas fa-heartbeat mr-2"></i>AI Health Companion
+      </h1>
+      <p class="lead text-muted">Instant analysis of your eye-related symptoms using AI</p>
+    </div>
+
+    <div class="card shadow-lg p-4 mb-4 bg-white">
+      <form id="symptomForm" enctype="multipart/form-data">
+        <div class="form-group">
+          <label for="symptom"><i class="fas fa-notes-medical mr-2"></i>Describe your symptoms</label>
+          <textarea class="form-control" id="symptom" name="symptom" rows="3" placeholder="E.g., itching, redness, blurry vision..." required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="image"><i class="fas fa-image mr-2"></i>Upload Eye Image (optional)</label>
+          <div class="custom-file">
+            <input type="file" class="custom-file-input" id="image" name="image" accept="image/*">
+            <label class="custom-file-label" for="image">Choose image</label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-gradient btn-block py-2 mt-4 text-white">
+          <i class="fas fa-stethoscope mr-1"></i>Analyze Symptoms
+        </button>
+      </form>
+
+      <hr class="my-4" />
+
+      <div class="text-center">
+        <button id="captureBtn" class="btn btn-outline-primary">
+          <i class="fas fa-camera mr-1"></i>Capture via Webcam
+        </button>
+      </div>
+    </div>
+
+    <div id="resultCard" class="card p-4 bg-light shadow">
+      <h5 class="text-dark font-weight-bold mb-3">📝 Diagnosis Result</h5>
+      <pre id="resultText" class="text-dark" style="white-space: pre-wrap;"></pre>
+    </div>
+
+    <div id="map"></div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.9.2/mapbox-gl.js"></script>
+  <script>
+    mapboxgl.accessToken = pk.eyJ1IjoidmFyc2hpdGgyNSIsImEiOiJjbWNoZjI1MG8wMXh3Mm1zNW8xbmRrd3hqIn0.eREPI9OLrv56epTL1rMiQg';
+
+    document.querySelector('.custom-file-input').addEventListener('change', function (e) {
+      const fileName = e.target.files[0]?.name || "Choose image";
+      e.target.nextElementSibling.innerText = fileName;
+    });
+
+    $('#symptomForm').on('submit', function (e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+
+      fetch('/analyze-symptom', {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        $('#resultCard').show();
+        $('#resultText').text(data.result || data.error);
+
+        if ((data.result || '').toLowerCase().includes("doctor: yes")) {
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+              const lat = pos.coords.latitude;
+              const lon = pos.coords.longitude;
+              loadNearbyHospitals(lat, lon);
+            });
+          }
+        }
+      });
+    });
+
+    $('#captureBtn').on('click', function () {
+      fetch('/capture')
+        .then(res => res.json())
+        .then(data => {
+          $('#resultCard').show();
+          $('#resultText').text(data.result || data.error);
+
+          if ((data.result || '').toLowerCase().includes("doctor: yes")) {
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(pos => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                loadNearbyHospitals(lat, lon);
+              });
+            }
+          }
+        });
+    });
+
+    function loadNearbyHospitals(lat, lon) {
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
+        .then(res => res.json())
+        .then(location => {
+          const city = location.address.city || location.address.town || location.address.village || location.address.state;
+          const query = `eye hospital in ${city}`;
+
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`)
+            .then(res => res.json())
+            .then(results => {
+              const map = new mapboxgl.Map({
+                container: 'map',
+                style: 'mapbox://styles/mapbox/streets-v11',
+                center: [lon, lat],
+                zoom: 13
+              });
+
+              new mapboxgl.Marker({ color: "red" })
+                .setLngLat([lon, lat])
+                .setPopup(new mapboxgl.Popup().setHTML("<b>Your Location</b>"))
+                .addTo(map);
+
+              results.forEach((place, i) => {
+                const fakePhone = `+91-90000${10000 + i}`;
+                const fakeEmail = `contact${i}@eyecare.com`;
+
+                const popupHTML = `
+                  <strong>${place.display_name.split(',')[0]}</strong><br/>
+                  📞 <a href="tel:${fakePhone}">${fakePhone}</a><br/>
+                  📧 <a href="mailto:${fakeEmail}">${fakeEmail}</a>
+                `;
+
+                new mapboxgl.Marker()
+                  .setLngLat([parseFloat(place.lon), parseFloat(place.lat)])
+                  .setPopup(new mapboxgl.Popup().setHTML(popupHTML))
+                  .addTo(map);
+              });
+
+              document.getElementById('map').style.display = 'block';
+            });
+        });
+    }
+  </script>
+</body>
+</html>

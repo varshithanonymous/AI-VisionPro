@@ -1,0 +1,10 @@
+flask
+flask-cors
+google-generativeai
+flask
+flask_sqlalchemy
+flask_login
+pillow
+opencv-python
+python-dotenv
+google-generativeai
