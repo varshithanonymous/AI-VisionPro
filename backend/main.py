@@ -8,6 +8,9 @@ from PIL import Image
 import cv2
 from dotenv import load_dotenv
 import google.generativeai as genai
+from flask_cors import CORS
+CORS(app)
+
 
 load_dotenv()
 
